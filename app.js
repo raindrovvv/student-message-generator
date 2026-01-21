@@ -2,14 +2,6 @@
 let studentsData = [];
 let isGenerating = false;
 
-// CORS 프록시 URL (여러 옵션)
-const CORS_PROXIES = [
-    'https://corsproxy.io/?',
-    'https://api.allorigins.win/raw?url=',
-];
-
-let currentProxyIndex = 0;
-
 // 토스트 메시지 표시
 function showToast(message, type = 'info') {
     const existing = document.querySelector('.toast');
@@ -29,7 +21,7 @@ function extractSheetId(url) {
     return match ? match[1] : null;
 }
 
-// CSV 파싱
+// CSV 파싱 (따옴표 및 줄바꿈 처리)
 function parseCSV(csv) {
     const lines = [];
     let currentLine = [];
@@ -98,6 +90,9 @@ async function loadData() {
         const csvText = await response.text();
         const rows = parseCSV(csvText);
         
+        console.log('Parsed rows:', rows.length);
+        
+        // 헤더 제외하고 데이터 파싱 (4번째 행부터 실제 데이터 - 0-indexed로 3)
         studentsData = [];
         
         for (let i = 3; i < rows.length; i++) {
@@ -209,7 +204,7 @@ function renderStudentList() {
     });
 }
 
-// Groq API로 메시지 생성 (CORS 프록시 사용)
+// Groq API로 메시지 생성
 async function generateMessage(index) {
     const apiKey = document.getElementById('apiKey').value;
     
@@ -254,8 +249,9 @@ ${styleGuide[style]}
 4. 앞으로의 게임 개발자로서의 여정을 응원해주세요
 5. 3~4문장 정도의 길이로 작성하세요
 6. 한국어로 작성하세요
+7. 진심이 담긴 메시지로 작성하세요
 
-메시지만 작성해주세요.`;
+메시지만 작성해주세요. 다른 설명 없이 메시지 내용만 출력하세요.`;
 
     const messageEl = document.getElementById(`message-${index}`);
     const genBtn = document.getElementById(`genBtn-${index}`);
@@ -268,11 +264,7 @@ ${styleGuide[style]}
     card.classList.remove('generated');
     
     try {
-        // CORS 프록시를 통해 요청
-        const targetUrl = 'https://api.groq.com/openai/v1/chat/completions';
-        const proxyUrl = CORS_PROXIES[currentProxyIndex] + encodeURIComponent(targetUrl);
-        
-        const response = await fetch(proxyUrl, {
+        const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -290,15 +282,8 @@ ${styleGuide[style]}
         });
         
         if (!response.ok) {
-            const errorText = await response.text();
-            let errorMessage = 'API 요청 실패';
-            try {
-                const errorData = JSON.parse(errorText);
-                errorMessage = errorData.error?.message || errorMessage;
-            } catch (e) {
-                errorMessage = errorText || errorMessage;
-            }
-            throw new Error(errorMessage);
+            const errorData = await response.json();
+            throw new Error(errorData.error?.message || 'API 요청 실패');
         }
         
         const data = await response.json();
@@ -310,15 +295,8 @@ ${styleGuide[style]}
         card.classList.add('generated');
         
     } catch (error) {
-        console.error('Error:', error);
         messageEl.innerHTML = `<span class="error-message">오류: ${error.message}</span>`;
         card.classList.remove('generating');
-        
-        // 다른 프록시 시도
-        if (currentProxyIndex < CORS_PROXIES.length - 1) {
-            currentProxyIndex++;
-            showToast('다른 프록시로 재시도합니다...', 'info');
-        }
     } finally {
         genBtn.disabled = false;
         genBtn.innerHTML = '✨ 메시지 생성';
@@ -362,6 +340,7 @@ async function generateAllMessages() {
             progressFill.style.width = `${progress}%`;
             progressText.textContent = `${progress}% (${completed}/${ungenerated})`;
             
+            // Groq API 속도 제한 방지 (분당 30 요청 제한 고려)
             if (completed < ungenerated) {
                 await new Promise(resolve => setTimeout(resolve, 2500));
             }
@@ -387,6 +366,7 @@ function copyMessage(index) {
     navigator.clipboard.writeText(message).then(() => {
         showToast('메시지가 클립보드에 복사되었습니다!', 'success');
     }).catch(() => {
+        // Fallback
         const textarea = document.createElement('textarea');
         textarea.value = message;
         document.body.appendChild(textarea);
@@ -419,7 +399,8 @@ function exportResults() {
         content += `| 센터 | ${student.center || '-'} |\n`;
         content += `| 포지션 | ${student.position || '-'} |\n`;
         content += `| 전공 | ${student.major || '-'} |\n`;
-        content += `| MBTI | ${student.mbti || '-'} |\n\n`;
+        content += `| MBTI | ${student.mbti || '-'} |\n`;
+        content += `| 점수 | ${student.score || '-'} |\n\n`;
         content += `### 💌 매니저의 한마디\n\n`;
         content += `> ${student.message || '(메시지 미생성)'}\n\n`;
         content += '---\n\n';
