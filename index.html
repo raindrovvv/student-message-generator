@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>수료생 격려 메시지 생성기</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🎓 수료생 격려 메시지 생성기</h1>
+            <p class="subtitle">매니저의 한마디 - 수강생들에게 전하는 응원의 메시지</p>
+        </header>
+
+        <section class="input-section">
+            <div class="input-group">
+                <label for="spreadsheetUrl">📊 구글 스프레드시트 URL</label>
+                <input type="text" id="spreadsheetUrl" 
+                       placeholder="https://docs.google.com/spreadsheets/d/..." 
+                       value="https://docs.google.com/spreadsheets/d/1B89JRw3VHOnL8BJclNxwmdoPoPO5D39BYSBuTII_FuA/edit?gid=0#gid=0">
+                <small>※ 스프레드시트를 '링크가 있는 모든 사용자에게 공개'로 설정해주세요</small>
+            </div>
+
+            <div class="input-group">
+                <label for="apiKey">🔑 Groq API Key</label>
+                <input type="password" id="apiKey" placeholder="gsk_...">
+                <small>※ <a href="https://console.groq.com/keys" target="_blank">Groq Console</a>에서 무료로 발급받을 수 있습니다</small>
+            </div>
+
+            <div class="input-group">
+                <label for="modelSelect">🤖 AI 모델 선택</label>
+                <select id="modelSelect">
+                    <option value="llama-3.3-70b-versatile">Llama 3.3 70B (추천 - 고품질)</option>
+                    <option value="llama-3.1-8b-instant">Llama 3.1 8B (빠름)</option>
+                    <option value="meta-llama/llama-4-maverick-17b-128e-instruct">Llama 4 Maverick 17B</option>
+                    <option value="qwen/qwen3-32b">Qwen3 32B</option>
+                </select>
+            </div>
+
+            <div class="input-group">
+                <label for="messageStyle">💬 메시지 스타일</label>
+                <select id="messageStyle">
+                    <option value="warm">따뜻하고 친근한</option>
+                    <option value="professional">전문적이고 격식있는</option>
+                    <option value="energetic">에너지 넘치는</option>
+                    <option value="mentoring">멘토링 느낌의</option>
+                </select>
+            </div>
+
+            <button id="loadDataBtn" class="btn btn-primary">📥 데이터 불러오기</button>
+        </section>
+
+        <section class="student-section" id="studentSection" style="display: none;">
+            <div class="section-header">
+                <h2>👨‍🎓 수강생 목록 (<span id="studentCount">0</span>명)</h2>
+                <div class="action-buttons">
+                    <button id="generateAllBtn" class="btn btn-success">✨ 전체 메시지 생성</button>
+                    <button id="exportBtn" class="btn btn-secondary">📄 결과 내보내기</button>
+                </div>
+            </div>
+            
+            <div class="progress-bar" id="progressBar" style="display: none;">
+                <div class="progress-fill" id="progressFill"></div>
+                <span class="progress-text" id="progressText">0%</span>
+            </div>
+
+            <div id="studentList" class="student-list"></div>
+        </section>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
