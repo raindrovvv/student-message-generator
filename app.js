@@ -2,6 +2,14 @@
 let studentsData = [];
 let isGenerating = false;
 
+// CORS 프록시 URL
+const CORS_PROXIES = [
+    'https://corsproxy.io/?',
+    'https://api.allorigins.win/raw?url=',
+];
+
+let currentProxyIndex = 0;
+
 // 토스트 메시지 표시
 function showToast(message, type = 'info') {
     const existing = document.querySelector('.toast');
@@ -21,7 +29,7 @@ function extractSheetId(url) {
     return match ? match[1] : null;
 }
 
-// CSV 파싱 (따옴표 및 줄바꿈 처리)
+// CSV 파싱
 function parseCSV(csv) {
     const lines = [];
     let currentLine = [];
@@ -90,9 +98,6 @@ async function loadData() {
         const csvText = await response.text();
         const rows = parseCSV(csvText);
         
-        console.log('Parsed rows:', rows.length);
-        
-        // 헤더 제외하고 데이터 파싱 (4번째 행부터 실제 데이터 - 0-indexed로 3)
         studentsData = [];
         
         for (let i = 3; i < rows.length; i++) {
@@ -218,10 +223,10 @@ async function generateMessage(index) {
     const model = document.getElementById('modelSelect').value;
     
     const styleGuide = {
-        warm: '따뜻하고 친근한 말투로, 가족처럼 정감있게',
-        professional: '전문적이고 격식있는 말투로, 공식적인 축하 메시지처럼',
-        energetic: '에너지 넘치고 열정적인 말투로, 파이팅을 불어넣듯이',
-        mentoring: '선배 멘토가 후배에게 조언하듯 따뜻하지만 진지하게'
+        warm: '따뜻하고 친근하면서도 정중한 말투로 작성하세요',
+        professional: '전문적이고 격식있는 공식 축하 메시지처럼 작성하세요',
+        energetic: '밝고 긍정적인 에너지가 느껴지는 말투로 작성하세요',
+        mentoring: '선배가 후배에게 조언하듯 따뜻하고 진중하게 작성하세요'
     };
     
     const prompt = `당신은 게임 개발 교육과정의 매니저입니다. 최종 프로젝트를 마치고 수료하는 수강생에게 개인화된 격려 메시지를 작성해주세요.
@@ -237,19 +242,21 @@ async function generateMessage(index) {
 - 점수: ${student.score || '미정'}
 - 개발능력: ${student.devSkill || '정보 없음'}
 - 유의사항/특이사항: ${student.notes || '없음'}
-- MBTI: ${student.mbti || '모름'}
 
 ## 메시지 스타일
 ${styleGuide[style]}
 
-## 작성 가이드
-1. 이름을 언급하며 시작하세요
-2. 수강생의 특성(전공, 포지션, MBTI 등)을 자연스럽게 반영한 개인화된 내용을 포함하세요
-3. 교육 과정 동안의 성장과 노력을 인정해주세요
-4. 앞으로의 게임 개발자로서의 여정을 응원해주세요
-5. 3~4문장 정도의 길이로 작성하세요
-6. 한국어로 작성하세요
-7. 진심이 담긴 메시지로 작성하세요
+## 필수 작성 규칙
+1. 반드시 존댓말(~습니다, ~세요, ~네요 등)로 작성하세요
+2. 이름 뒤에 "님"을 붙이세요 (예: 홍길동님)
+3. 100% 자연스러운 한국어만 사용하세요. 외국어, 한자, 이모지를 절대 섞지 마세요
+4. MBTI는 언급하지 마세요
+5. 2~3문장으로 간결하게 작성하세요
+6. 수강생의 특성(전공 여부, 포지션, 성장 포인트 등)을 자연스럽게 반영하세요
+7. 진심이 담긴 따뜻한 메시지로 작성하세요
+
+## 좋은 예시
+"홍길동님, 수료를 진심으로 축하드립니다. 비전공자로 시작하셨지만 꾸준한 노력으로 팀 프로젝트를 훌륭히 마무리하신 모습이 정말 인상적이었습니다. 앞으로의 게임 개발자로서의 여정도 응원하겠습니다."
 
 메시지만 작성해주세요. 다른 설명 없이 메시지 내용만 출력하세요.`;
 
@@ -264,7 +271,15 @@ ${styleGuide[style]}
     card.classList.remove('generated');
     
     try {
-        const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+        // 호스팅 환경에서는 직접 호출, 로컬에서는 CORS 프록시 사용
+        let apiUrl = 'https://api.groq.com/openai/v1/chat/completions';
+        
+        // 로컬 파일에서 실행 중인지 확인
+        if (window.location.protocol === 'file:') {
+            apiUrl = CORS_PROXIES[currentProxyIndex] + encodeURIComponent(apiUrl);
+        }
+        
+        const response = await fetch(apiUrl, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -276,18 +291,25 @@ ${styleGuide[style]}
                     role: 'user',
                     content: prompt
                 }],
-                max_tokens: 1024,
-                temperature: 0.8
+                max_tokens: 512,
+                temperature: 0.7
             })
         });
         
         if (!response.ok) {
-            const errorData = await response.json();
-            throw new Error(errorData.error?.message || 'API 요청 실패');
+            const errorText = await response.text();
+            let errorMessage = 'API 요청 실패';
+            try {
+                const errorData = JSON.parse(errorText);
+                errorMessage = errorData.error?.message || errorMessage;
+            } catch (e) {
+                errorMessage = errorText || errorMessage;
+            }
+            throw new Error(errorMessage);
         }
         
         const data = await response.json();
-        const message = data.choices[0].message.content;
+        const message = data.choices[0].message.content.trim();
         
         studentsData[index].message = message;
         messageEl.innerHTML = message;
@@ -295,8 +317,14 @@ ${styleGuide[style]}
         card.classList.add('generated');
         
     } catch (error) {
+        console.error('Error:', error);
         messageEl.innerHTML = `<span class="error-message">오류: ${error.message}</span>`;
         card.classList.remove('generating');
+        
+        if (window.location.protocol === 'file:' && currentProxyIndex < CORS_PROXIES.length - 1) {
+            currentProxyIndex++;
+            showToast('다른 프록시로 재시도합니다...', 'info');
+        }
     } finally {
         genBtn.disabled = false;
         genBtn.innerHTML = '✨ 메시지 생성';
@@ -340,7 +368,6 @@ async function generateAllMessages() {
             progressFill.style.width = `${progress}%`;
             progressText.textContent = `${progress}% (${completed}/${ungenerated})`;
             
-            // Groq API 속도 제한 방지 (분당 30 요청 제한 고려)
             if (completed < ungenerated) {
                 await new Promise(resolve => setTimeout(resolve, 2500));
             }
@@ -366,7 +393,6 @@ function copyMessage(index) {
     navigator.clipboard.writeText(message).then(() => {
         showToast('메시지가 클립보드에 복사되었습니다!', 'success');
     }).catch(() => {
-        // Fallback
         const textarea = document.createElement('textarea');
         textarea.value = message;
         document.body.appendChild(textarea);
@@ -386,10 +412,10 @@ function exportResults() {
         return;
     }
     
-    let content = '# 🎓 수료생 격려 메시지\n\n';
-    content += `📅 생성일: ${new Date().toLocaleDateString('ko-KR')}\n`;
-    content += `👥 총 인원: ${studentsData.length}명\n`;
-    content += `✅ 생성 완료: ${generated}명\n\n`;
+    let content = '# 수료생 격려 메시지\n\n';
+    content += `생성일: ${new Date().toLocaleDateString('ko-KR')}\n`;
+    content += `총 인원: ${studentsData.length}명\n`;
+    content += `생성 완료: ${generated}명\n\n`;
     content += '---\n\n';
     
     studentsData.forEach((student, index) => {
@@ -398,10 +424,8 @@ function exportResults() {
         content += `|------|------|\n`;
         content += `| 센터 | ${student.center || '-'} |\n`;
         content += `| 포지션 | ${student.position || '-'} |\n`;
-        content += `| 전공 | ${student.major || '-'} |\n`;
-        content += `| MBTI | ${student.mbti || '-'} |\n`;
-        content += `| 점수 | ${student.score || '-'} |\n\n`;
-        content += `### 💌 매니저의 한마디\n\n`;
+        content += `| 전공 | ${student.major || '-'} |\n\n`;
+        content += `### 매니저의 한마디\n\n`;
         content += `> ${student.message || '(메시지 미생성)'}\n\n`;
         content += '---\n\n';
     });
